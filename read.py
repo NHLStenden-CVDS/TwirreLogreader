@@ -3,8 +3,9 @@ from typing import Dict
 from typing import Tuple
 
 import matplotlib.pyplot as plt
+import time
 
-path = "D:\\twirrelog_2018-03-05T161052+0100.tlog"
+path = "/media/mrd/Data/twirrelog_2018-03-05T161052+0100.tlog"
 
 
 class LogfileParser:
@@ -21,19 +22,19 @@ class LogfileParser:
         self.actuator_dict = {}
         self.__process_file()
 
-    def get_sensor_dict(self) -> Dict[str, Dict[str, Dict[int, float]]]:
+    def get_sensor_dict(self) -> Dict[str, Dict[str, Dict[float, float]]]:
         return self.sensor_dict
 
     def get_actuator_dict(self):
         return self.actuator_dict
 
-    def get_timevalue_lists(self, devname: str, valuename: str, isactuator: bool) -> Tuple[List[int], List[float]]:
+    def get_timevalue_lists(self, devname: str, valuename: str, isactuator: bool, fromtime: float=0, tilltime: float=1e99) -> Tuple[List[float], List[float]]:
         if isactuator:
             readings = self.actuator_dict[devname][valuename]
         else:
             readings = self.sensor_dict[devname][valuename]
 
-        reading_times = sorted(readings.keys())
+        reading_times = [t for t in sorted(readings.keys()) if fromtime <= t < tilltime]
         reading_values = [readings[t] for t in reading_times]
 
         return reading_times, reading_values
@@ -107,7 +108,7 @@ class LogfileParser:
                 except ValueError:
                     print('illegal kv:', kv)
                     continue
-                self.__get_dict_for_value(dev_dict, key)[time] = value
+                self.__get_dict_for_value(dev_dict, key)[time / 1000000.0] = value
 
     def __process_actuate(self, parts, time):
         if len(parts) < 1:
@@ -159,6 +160,41 @@ class LogfileParser:
 
 log = LogfileParser(path)
 
-altitude_time, altitude_value = log.get_timevalue_lists('sonar1', 'firstDistance', False)
-plt.scatter(altitude_time, altitude_value)
-plt.show()
+from_time = 60.0
+till_time = 80.0
+
+
+def show_control_plot(err_name, err_dev, err_value, err_isactuator, ctl_dev, ctl_value, ctl_isactuator, fromtime, tilltime, scale_err: float=1, offset_err: float=0):
+    error_time, error_value = log.get_timevalue_lists(err_dev, err_value, err_isactuator, fromtime=fromtime, tilltime=tilltime)
+    error_value = [x * scale_err + offset_err for x in error_value]
+    ctl_time, ctl_value = log.get_timevalue_lists(ctl_dev, ctl_value, ctl_isactuator, fromtime=fromtime, tilltime=tilltime)
+
+    fig, ax1 = plt.subplots()
+    color = 'tab:red'
+    ax1.set_xlabel('time (s)')
+    ax1.set_ylabel(err_name + ' error (m)', color=color)
+    ax1.plot((from_time, till_time), (0, 0), '-', color=color)
+    ax1.plot(error_time, error_value, color=color)
+    ax1.tick_params(axis='y', labelcolor=color)
+
+    ax2 = ax1.twinx()  # instantiate a second axes that shares the same x-axis
+
+    color = 'tab:blue'
+    ax2.set_ylabel('control output', color=color)  # we already handled the x-label with ax1
+    ax2.step(ctl_time, ctl_value, color=color, where='post')
+    ax2.plot((from_time, till_time), (0, 0), '-', color=color)
+    ax2.scatter(ctl_time, ctl_value, color=color, marker='.')
+    ax2.tick_params(axis='y', labelcolor=color)
+
+    fig.tight_layout()  # otherwise the right y-label is slightly clipped
+    plt.show()
+
+
+plt.ion()
+show_control_plot('altitude', 'sonar1', 'firstDistance', False, 'naza', 'gaz', True, from_time, till_time, scale_err=0.01, offset_err=-1.1)
+show_control_plot('horizontal', 'lns', 'localTgtPositionRight', True, 'naza', 'roll', True, from_time, till_time)
+show_control_plot('yaw', 'lns', 'localTgtPositionYaw', True, 'naza', 'yaw', True, from_time, till_time)
+show_control_plot('distance', 'lns', 'localTgtPositionForward', True, 'naza', 'pitch', True, from_time, till_time)
+while True:
+    plt.pause(0.001)
+    time.sleep(0.2)
