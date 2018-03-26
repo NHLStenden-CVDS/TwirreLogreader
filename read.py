@@ -5,7 +5,8 @@ from typing import Tuple
 import matplotlib.pyplot as plt
 import time
 
-path = "/media/mrd/Data/twirrelog_2018-03-05T161052+0100.tlog"
+# path = "/media/mrd/Data/twirrelog_2018-03-05T161052+0100.tlog"
+# path = "/home/mrd/git/twirre-full/twirre/vissvr/twirrelog_2018-03-22_09-36-01.tlog"
 
 
 class LogfileParser:
@@ -158,13 +159,15 @@ class LogfileParser:
 
             self.__process_line(parts[1:], timestamp)
 
+
+path = "/home/mrd/logs/twirrelog_2018-03-23_13-39-15.tlog"
 log = LogfileParser(path)
 
-from_time = 60.0
-till_time = 80.0
+from_time = 0
+till_time = 130
 
 
-def show_control_plot(err_name, err_dev, err_value, err_isactuator, ctl_dev, ctl_value, ctl_isactuator, fromtime, tilltime, scale_err: float=1, offset_err: float=0):
+def show_control_plot(err_name, err_dev, err_value, err_isactuator, ctl_name, ctl_dev, ctl_value, ctl_isactuator, fromtime, tilltime, scale_err: float=1, offset_err: float=0):
     error_time, error_value = log.get_timevalue_lists(err_dev, err_value, err_isactuator, fromtime=fromtime, tilltime=tilltime)
     error_value = [x * scale_err + offset_err for x in error_value]
     ctl_time, ctl_value = log.get_timevalue_lists(ctl_dev, ctl_value, ctl_isactuator, fromtime=fromtime, tilltime=tilltime)
@@ -172,17 +175,18 @@ def show_control_plot(err_name, err_dev, err_value, err_isactuator, ctl_dev, ctl
     fig, ax1 = plt.subplots()
     color = 'tab:red'
     ax1.set_xlabel('time (s)')
-    ax1.set_ylabel(err_name + ' error (m)', color=color)
+    ax1.set_ylabel(err_name, color=color)
     ax1.plot((from_time, till_time), (0, 0), '-', color=color)
     ax1.plot(error_time, error_value, color=color)
+    ax1.scatter(error_time, error_value, color=color, marker='.')
     ax1.tick_params(axis='y', labelcolor=color)
 
     ax2 = ax1.twinx()  # instantiate a second axes that shares the same x-axis
 
     color = 'tab:blue'
-    ax2.set_ylabel('control output', color=color)  # we already handled the x-label with ax1
-    ax2.step(ctl_time, ctl_value, color=color, where='post')
+    ax2.set_ylabel(ctl_name, color=color)  # we already handled the x-label with ax1
     ax2.plot((from_time, till_time), (0, 0), '-', color=color)
+    ax2.step(ctl_time, ctl_value, color=color, where='post')
     ax2.scatter(ctl_time, ctl_value, color=color, marker='.')
     ax2.tick_params(axis='y', labelcolor=color)
 
@@ -190,11 +194,21 @@ def show_control_plot(err_name, err_dev, err_value, err_isactuator, ctl_dev, ctl
     plt.show()
 
 
+show_XY = False
+
 plt.ion()
-show_control_plot('altitude', 'sonar1', 'firstDistance', False, 'naza', 'gaz', True, from_time, till_time, scale_err=0.01, offset_err=-1.1)
-show_control_plot('horizontal', 'lns', 'localTgtPositionRight', True, 'naza', 'roll', True, from_time, till_time)
-show_control_plot('yaw', 'lns', 'localTgtPositionYaw', True, 'naza', 'yaw', True, from_time, till_time)
-show_control_plot('distance', 'lns', 'localTgtPositionForward', True, 'naza', 'pitch', True, from_time, till_time)
+show_control_plot('Alti error (m)', 'lns', 'auxUpError', False, 'Throttle output', 'lns', 'gazout', False, from_time, till_time)
+show_control_plot('Yaw error (deg)', 'lns', 'mainYawError', False, 'Yaw output', 'lns', 'yawout', False, from_time, till_time)
+show_control_plot('Gaz_p_component', 'lns_AltiPID', 'component_p0', False, 'Gaz_d_component', 'lns_AltiPID', 'component_d0', False, from_time, till_time)
+
+if show_XY:
+    # show positions and velocities in XY plane
+    show_control_plot('Y-position (m)', 'lns', 'auxForwardRaw', False, 'X-position (m)', 'lns', 'auxRightRaw', False, from_time, till_time)
+    show_control_plot('Y-error (m)', 'lns', 'auxForwardError', False, 'X-error (m)', 'lns', 'auxRightError', False, from_time, till_time)
+    show_control_plot('Y-velocity (m/s)', 'lns', 'mainForwardRaw', False, 'X-velocity (m/s)', 'lns', 'mainRightRaw', False, from_time, till_time)
+    show_control_plot('Forward V-error (m/s)', 'lns', 'mainForwardError', False, 'Right V-error (m/s)', 'lns', 'mainRightError', False, from_time, till_time)
+    show_control_plot('PitchControl', 'lns', 'pitchout', False, 'RollControl', 'lns', 'rollout', False, from_time, till_time)
+
 while True:
     plt.pause(0.001)
     time.sleep(0.2)
